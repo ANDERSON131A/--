@@ -1,0 +1,6 @@
+tmp參考資料 不入git/
+node_modules/
+.venv/
+tools/
+__pycache__/
+*.log

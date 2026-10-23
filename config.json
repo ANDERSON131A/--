@@ -1,0 +1,43 @@
+{
+  "project": { "name": "dom-sidecar", "version": "0.1.0" },
+  "browser": { "engine": "edge", "provider": "tampermonkey", "automation": false },
+  "observer": {
+    "mode": "hybrid",
+    "capture_on_demand": true,
+    "watch_mutations": true,
+    "capture": {
+      "raw_html": true,
+      "semantic_text": true,
+      "links": true,
+      "forms": false,
+      "shadow_dom": false,
+      "iframes": false
+    },
+    "debounce_ms": 500,
+    "max_text_chars": 100000,
+    "max_links": 500
+  },
+  "bridge": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "token": "dS-local-dev-7f31a8e2c4b9-CHANGE_ME",
+    "heartbeat_seconds": 5,
+    "capture_wait_seconds": 8
+  },
+  "storage": {
+    "engine": "memory",
+    "history_limit": 10,
+    "expired_seconds": 300
+  },
+  "mcp": {
+    "transport": "streamable-http",
+    "endpoint": "/mcp",
+    "enable_json_response": true
+  },
+  "security": {
+    "default_policy": "deny",
+    "allowed_domains": ["example.com", "localhost", "127.0.0.1"],
+    "redact_sensitive_fields": true,
+    "allow_browser_control": false
+  }
+}
