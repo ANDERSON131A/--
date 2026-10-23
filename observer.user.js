@@ -158,7 +158,16 @@
       html = utf8Trim(html, MAX_HTML_BYTES);
     }
 
-    const text = ((document.body && document.body.innerText) || "").slice(0, MAX_TEXT_CHARS);
+    let text = ((document.body && document.body.innerText) || "").slice(0, MAX_TEXT_CHARS);
+    if (utf8Length(text) < 200) {
+      // 背景分頁未排版時 innerText 可能近乎空,改從 clone 的 textContent 兜底
+      const textClone = document.body ? document.body.cloneNode(true) : null;
+      if (textClone) {
+        textClone.querySelectorAll("script,style,noscript,template").forEach((el) => el.remove());
+        const tc = (textClone.textContent || "").replace(/[ \t]+\n/g, "\n").trim();
+        if (utf8Length(tc) > utf8Length(text)) text = tc.slice(0, MAX_TEXT_CHARS);
+      }
+    }
     const links = [...document.querySelectorAll("a[href]")]
       .slice(0, MAX_LINKS)
       .map((a) => ({ text: (a.innerText || "").trim().slice(0, 200), href: a.href }))
