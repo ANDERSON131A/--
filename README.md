@@ -74,6 +74,9 @@ node test/e2e-check.mjs --contains "範例航空 C" --not-contains "範例航空
 2. 確認腳本內的 `TOKEN` 與 `config.json` 的 `bridge.token` 一致
    (白名單已停用:`allowed_domains: ["*"]`,由 `@match`/排除規則把關)。
 3. AI 端的 MCP 設定指向 `http://127.0.0.1:8765/mcp`(Streamable HTTP)。
+   本工作區已內建 `.zcode/config.json` 連線設定與 `.agents/skills/dom-sidecar`
+   skill —— ZCode 開啟本專案即自動接上,agent 看到「看我目前的頁面」類請求會
+   自動使用;其他 MCP client 手動加入即可。
 
 ## 安全設計(唯讀 ≠ 安全)
 
