@@ -7,6 +7,7 @@
 // @match        *://*/*
 // @run-at       document-idle
 // @sandbox      DOM
+// @noframes
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_getTab
@@ -45,6 +46,8 @@
   const MAX_HTML_BYTES = 2 * 1024 * 1024; // 與 observer.max_snapshot_bytes 相同
   const MAX_TEXT_CHARS = 100000;
   const MAX_LINKS = 500;
+  const CAPTURE_FORMS = PAGE_CFG.CAPTURE_FORMS !== undefined ? PAGE_CFG.CAPTURE_FORMS : true; // 與 config.json 的 observer.capture.forms 相同
+  const CAPTURE_SHADOW = PAGE_CFG.CAPTURE_SHADOW !== undefined ? PAGE_CFG.CAPTURE_SHADOW : true; // 與 config.json 的 observer.capture.shadow_dom 相同
 
   // ------------------------------------------------------------------ 狀態
   let tabId = null;
@@ -53,6 +56,7 @@
   let pendingMutations = 0;
   let enabled = true;
   let warned = false;
+  let capturePaused = false; // 安全開關(油猴選單切換,僅影響本機此頁)
 
   const log = (...a) => console.log("%c[Sidecar]", "color:#0d9488;font-weight:bold", ...a);
   const warn = (...a) => console.warn("%c[Sidecar]", "color:#d97706;font-weight:bold", ...a);
@@ -122,7 +126,7 @@
   }
 
   function sendStatus() {
-    if (!enabled || pendingMutations === 0) return;
+    if (!enabled || capturePaused || pendingMutations === 0) return;
     const mutations = pendingMutations;
     pendingMutations = 0;
     domRevision += 1;
@@ -153,6 +157,24 @@
       el.textContent = "[REDACTED]";
     });
 
+    // Open Shadow DOM:以 declarative template 注入序列化結果(必須在 outerHTML 之前)
+    if (CAPTURE_SHADOW) {
+      const pairs = [];
+      (function walk(live, cl) {
+        pairs.push([live, cl]);
+        const l = live.children, c = cl.children;
+        for (let i = 0; i < l.length && i < c.length; i++) walk(l[i], c[i]);
+      })(document.documentElement, clone);
+      for (const [live, cl] of pairs) {
+        if (live.shadowRoot) {
+          const tpl = document.createElement("template");
+          tpl.setAttribute("shadowrootmode", "open");
+          tpl.innerHTML = live.shadowRoot.innerHTML;
+          cl.insertBefore(tpl, cl.firstChild);
+        }
+      }
+    }
+
     let html = clone.outerHTML || "";
     if (utf8Length(html) > MAX_HTML_BYTES) {
       html = utf8Trim(html, MAX_HTML_BYTES);
@@ -173,6 +195,21 @@
       .map((a) => ({ text: (a.innerText || "").trim().slice(0, 200), href: a.href }))
       .filter((l) => l.href);
 
+    // 表單現值(排除密碼、隱藏欄位、信用卡欄位)
+    let forms;
+    if (CAPTURE_FORMS) {
+      forms = [...document.querySelectorAll("input,textarea,select")]
+        .filter((el) => el.type !== "password" && el.type !== "hidden" && !el.disabled &&
+                !(el.getAttribute("autocomplete") || "").startsWith("cc-"))
+        .slice(0, 100)
+        .map((el) => ({
+          tag: el.tagName.toLowerCase(),
+          type: el.type || null,
+          name: el.name || el.id || null,
+          value: (el.value || "").slice(0, 200)
+        }));
+    }
+
     return {
       type: "snapshot",
       request_id: requestId || undefined,
@@ -185,7 +222,8 @@
       captured_at: Date.now(),
       html,
       text,
-      links
+      links,
+      forms
     };
   }
 
@@ -222,6 +260,7 @@
     if (r.status === 0) return; // 本機服務不在
     if (r.body && Array.isArray(r.body.commands)) {
       for (const cmd of r.body.commands) {
+        if (capturePaused) { log("⏸ 採集已暫停(油猴選單),忽略採集命令"); continue; }
         if (cmd.action === "capture") {
           log("收到採集請求", cmd.request_id);
           await uploadSnapshot(cmd.request_id);
@@ -248,7 +287,12 @@
   // --------------------------------------------------------- 選單命令
   GM_registerMenuCommand("立即擷取目前 DOM", () => {
     if (!enabled) return warn("此網域未啟用(不在白名單)");
+    if (capturePaused) return warn("⏸ 採集已暫停,請先用選單恢復");
     uploadSnapshot();
+  });
+  GM_registerMenuCommand("切換採集(暫停 / 繼續)", () => {
+    capturePaused = !capturePaused;
+    log(capturePaused ? "⏸ 已暫停採集(此頁,重載後恢復)" : "▶ 已恢復採集");
   });
   GM_registerMenuCommand("顯示 Sidecar 狀態", () => {
     log("tab_id:", tabId, "| document_id:", documentId, "| revision:", domRevision, "| enabled:", enabled);

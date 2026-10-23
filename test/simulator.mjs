@@ -122,11 +122,21 @@ try {
 
   // ================================================== 3. MCP get_dom 現場採集(端到端)
   console.log("\n[3] get_dom → /poll 命令 → 真實 observer 序列化上傳");
+  // 先布置 Shadow DOM 與表單,驗證「全開」採集
+  const host = env.w.document.createElement("div");
+  host.id = "shadow-host";
+  env.w.document.body.appendChild(host);
+  host.attachShadow({ mode: "open" }).innerHTML = "<span>SHADOW_MARKER_XYZ</span>";
+  env.w.document.querySelector("main").insertAdjacentHTML("beforeend", '<input name="q" value="模擬搜尋字詞">');
+  await sleep(400);
   await mcp("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "sim", version: "0" } });
   const t = await callTool("get_dom", { tab_id: tabId });
   check("get_dom 取得 live 快照", t.data?.freshness === "live" && !t.isError, JSON.stringify(t.data)?.slice(0, 200));
   check("快照含原始內容與動態新增內容", t.data?.html?.includes("NT$ 2,500") && t.data?.html?.includes("新航班"));
   check("密碼欄位 value 已被 redact", t.data?.html?.includes("TOP_SECRET") === false);
+  check("Shadow DOM 以 declarative template 採集", t.data?.html?.includes("shadowrootmode") && t.data?.html?.includes("SHADOW_MARKER_XYZ"));
+  check("表單現值已採集(forms)", (t.data?.forms || []).some((f) => f.name === "q" && f.value === "模擬搜尋字詞"));
+  check("密碼/隱藏欄位不進 forms", !(t.data?.forms || []).some((f) => f.type === "password" || f.type === "hidden"));
 
   // ================================================== 4. get_text
   console.log("\n[4] get_text");
@@ -162,10 +172,22 @@ try {
   check("observer 自我停用(白名單警告已觸發)", env3.warnings.some((s) => s.includes("白名單")));
 
   // ================================================== 8. 離線判定
+  // 用安全開關凍結心跳,避免背景 poll 的競爭(同時驗證 pause 不影響唯讀查詢)
   console.log("\n[8] 離線判定");
+  await fetch(`${BASE}/control`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Sidecar-Token": TOKEN },
+    body: JSON.stringify({ action: "pause" })
+  });
+  await sleep(300);
   inst.store.pages.get(tabId).last_seen = Date.now() - 120000;
   const t5 = await callTool("get_page_info", { tab_id: tabId });
   check("心跳停止後 freshness 變 offline、快照仍在", t5.data?.freshness === "offline" && t5.data?.has_snapshot === true);
+  await fetch(`${BASE}/control`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Sidecar-Token": TOKEN },
+    body: JSON.stringify({ action: "resume" })
+  });
 } catch (e) {
   fail++;
   console.error("測試執行中斷:", e);

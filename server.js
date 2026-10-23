@@ -293,7 +293,8 @@ function handleIngest(store, cfg, body) {
       title: body.title,
       html: body.html || "",
       text: (body.text || "").slice(0, cfg.observer.max_text_chars),
-      links: (body.links || []).slice(0, cfg.observer.max_links)
+      links: (body.links || []).slice(0, cfg.observer.max_links),
+      forms: (body.forms || []).slice(0, 100)
     };
     store.pushSnapshot(page, snap);
     page.url = body.url || page.url;
@@ -337,7 +338,11 @@ function handlePoll(store, cfg, query) {
 // MCP Server(/mcp,Streamable HTTP,有 session 模式)
 // ---------------------------------------------------------------------------
 
-function registerTools(mcp, store, cfg) {
+function registerTools(mcp, store, cfg, runtime) {
+  const pausedResult = () => textResult(
+    { paused: true, detail: "採集已暫停(安全開關):以 POST /control {action:'resume'} 恢復,或把 config.json 的 security.capture_enabled 設為 true" },
+    true
+  );
   const pageInfoView = (p) => ({
     tab_id: p.tab_id,
     document_id: p.document_id,
@@ -388,6 +393,7 @@ function registerTools(mcp, store, cfg) {
       inputSchema: { ...tabArg, max_bytes: z.number().int().positive().optional().describe("回傳 HTML 的位元組上限,預設不截斷") }
     },
     async ({ tab_id, max_bytes }) => {
+      if (runtime.paused) return pausedResult();
       const p = pickPage(store, tab_id);
       const { snapshot, freshness, note } = await requestSnapshot(store, cfg, p, cfg.bridge.capture_wait_seconds * 1000);
       if (!snapshot) {
@@ -413,6 +419,7 @@ function registerTools(mcp, store, cfg) {
         title: snapshot.title,
         html_bytes: Buffer.byteLength(snapshot.html, "utf8"),
         truncated,
+        forms: snapshot.forms,
         html
       });
     }
@@ -426,6 +433,7 @@ function registerTools(mcp, store, cfg) {
       inputSchema: tabArg
     },
     async ({ tab_id }) => {
+      if (runtime.paused) return pausedResult();
       const p = pickPage(store, tab_id);
       const { snapshot, freshness, note } = await requestSnapshot(store, cfg, p, cfg.bridge.capture_wait_seconds * 1000);
       if (!snapshot) {
@@ -449,6 +457,7 @@ function registerTools(mcp, store, cfg) {
         url: snapshot.url,
         title: snapshot.title,
         truncated,
+        forms: snapshot.forms,
         text
       });
     }
@@ -482,7 +491,7 @@ function textResult(obj, isError = false) {
   return { content: [{ type: "text", text: JSON.stringify(obj, null, 2) }], isError };
 }
 
-function createMcpSessions(cfg, store) {
+function createMcpSessions(cfg, store, runtime) {
   const sessions = new Map(); // sessionId -> {transport, server}
 
   const host = cfg.bridge.host;
@@ -524,7 +533,7 @@ function createMcpSessions(cfg, store) {
       allowedHosts
     });
     const mcp = new McpServer(SERVER_INFO);
-    registerTools(mcp, store, cfg);
+    registerTools(mcp, store, cfg, runtime);
     await mcp.connect(transport);
     await transport.handleRequest(req, res, parsedBody);
     if (transport.sessionId) {
@@ -543,7 +552,10 @@ function createMcpSessions(cfg, store) {
 // ---------------------------------------------------------------------------
 
 function createApp(cfg, store) {
-  const mcpSessions = createMcpSessions(cfg, store);
+  // 安全開關(安全開關):runtime 狀態,可由 POST /control 即時切換,不需重啟
+  const runtime = { paused: false };
+  const effectivePaused = () => runtime.paused || cfg.security.capture_enabled === false;
+  const mcpSessions = createMcpSessions(cfg, store, runtime);
 
   async function handler(req, res) {
     const u = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
@@ -556,10 +568,30 @@ function createApp(cfg, store) {
       }
 
       if (u.pathname === "/healthz") {
-        return json(res, 200, { ok: true, name: SERVER_INFO.name, version: SERVER_INFO.version, pages: store.pages.size }, CORS_HEADERS);
+        return json(res, 200, { ok: true, name: SERVER_INFO.name, version: SERVER_INFO.version, pages: store.pages.size, paused: effectivePaused() }, CORS_HEADERS);
+      }
+
+      // 安全開關控制端點(同 token 驗證)
+      if (u.pathname === "/control") {
+        const token = req.headers["x-sidecar-token"];
+        if (!cfg.bridge.token || token !== cfg.bridge.token) {
+          return json(res, 401, { error: "unauthorized" }, CORS_HEADERS);
+        }
+        if (req.method === "GET") {
+          return json(res, 200, { ok: true, paused: effectivePaused() }, CORS_HEADERS);
+        }
+        const body = JSON.parse((await readBody(req, res)).toString("utf8") || "{}");
+        if (body.action === "pause") runtime.paused = true;
+        else if (body.action === "resume") runtime.paused = false;
+        else return json(res, 400, { error: "unknown_action", detail: "action 必須是 pause 或 resume" }, CORS_HEADERS);
+        console.log(`[sidecar] 安全開關:${runtime.paused ? "已暫停採集" : "已恢復採集"}`);
+        return json(res, 200, { ok: true, paused: effectivePaused() }, CORS_HEADERS);
       }
 
       if (u.pathname === "/ingest" && req.method === "POST") {
+        if (effectivePaused()) {
+          return json(res, 503, { error: "paused", detail: "採集已暫停:以 POST /control {action:'resume'} 恢復" }, CORS_HEADERS);
+        }
         const token = req.headers["x-sidecar-token"];
         if (!cfg.bridge.token || token !== cfg.bridge.token) {
           return json(res, 401, { error: "unauthorized", detail: "X-Sidecar-Token 不符或未設定" }, CORS_HEADERS);
@@ -573,6 +605,9 @@ function createApp(cfg, store) {
         const token = req.headers["x-sidecar-token"];
         if (!cfg.bridge.token || token !== cfg.bridge.token) {
           return json(res, 401, { error: "unauthorized", detail: "X-Sidecar-Token 不符或未設定" }, CORS_HEADERS);
+        }
+        if (effectivePaused()) {
+          return json(res, 200, { ok: true, paused: true, commands: [] }, CORS_HEADERS);
         }
         return json(res, 200, handlePoll(store, cfg, u.searchParams).body, CORS_HEADERS);
       }

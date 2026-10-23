@@ -194,6 +194,34 @@ try {
   inst.store.pages.get("t1").last_seen = Date.now() - 120000;
   t = await callTool("get_page_info", { tab_id: "t1" });
   check("心跳過期後 freshness 變 offline(但仍有快照)", t.data?.freshness === "offline" && t.data?.has_snapshot === true);
+
+  // ================================================== [6] 安全開關
+  console.log("\n[6] 安全開關 /control");
+  let c = await fetch(`${BASE}/control`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Sidecar-Token": TOKEN },
+    body: JSON.stringify({ action: "pause" })
+  });
+  check("pause 回 200 且 paused=true", c.status === 200 && (await c.json()).paused === true);
+
+  r = await ing({ type: "register", tab_id: "t9", document_id: "d9", url: "https://example.com/" });
+  check("暫停時 /ingest 回 503", r.status === 503);
+
+  r = await fetch(`${BASE}/poll?tab_id=t1`, { headers: { "X-Sidecar-Token": TOKEN } });
+  check("暫停時 /poll 不派命令", r.status === 200 && (await r.json()).paused === true);
+
+  t = await callTool("get_dom", { tab_id: "t1" });
+  check("暫停時 get_dom 回 paused 錯誤", t.isError === true && t.data?.paused === true);
+
+  c = await fetch(`${BASE}/control`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Sidecar-Token": TOKEN },
+    body: JSON.stringify({ action: "resume" })
+  });
+  check("resume 後 paused=false", c.status === 200 && (await c.json()).paused === false);
+
+  r = await ing({ type: "register", tab_id: "t9", document_id: "d9", url: "https://example.com/" });
+  check("恢復後 /ingest 正常", r.status === 200);
 } catch (e) {
   fail++;
   console.error("測試執行中斷:", e);

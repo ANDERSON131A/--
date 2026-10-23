@@ -9,8 +9,8 @@
       "raw_html": true,
       "semantic_text": true,
       "links": true,
-      "forms": false,
-      "shadow_dom": false,
+      "forms": true,
+      "shadow_dom": true,
       "iframes": false
     },
     "debounce_ms": 500,
@@ -37,6 +37,7 @@
   "security": {
     "default_policy": "allow",
     "allowed_domains": ["*"],
+    "capture_enabled": true,
     "redact_sensitive_fields": true,
     "allow_browser_control": false
   }
