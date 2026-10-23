@@ -4,8 +4,7 @@
 // @version      0.1.0
 // @description  唯讀瀏覽器副駕駛觀察器:讀取 Live DOM 送到本機 Node.js MCP Server。不點擊、不導航、不注入操作 —— AI 只讀資料,瀏覽器由你控制。
 // @author       dom-sidecar
-// @match        https://example.com/*
-// @match        http://localhost/*
+// @match        *://*/*
 // @run-at       document-idle
 // @sandbox      DOM
 // @grant        GM_xmlhttpRequest
@@ -27,8 +26,8 @@
  *
  *  設定:
  *   - TOKEN 必須與 config.json 的 bridge.token 一致
- *   - @match 加入你要觀察的網站,同時把該網域加進 config.json 的
- *     security.allowed_domains(server 預設 deny)
+ *   - 預設 match 所有網站(星號萬用);想排除敏感網站(網銀等)時,
+ *     在 Tampermonkey 腳本設定加入使用者排除規則,或改回逐站 match 規則
  *   - 背景分頁的計時器會被瀏覽器節流,採集延遲可能變長,屬正常現象
  */
 

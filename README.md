@@ -69,10 +69,11 @@ node test/e2e-check.mjs --contains "範例航空 C" --not-contains "範例航空
 接上瀏覽器:
 
 1. Edge 安裝 Tampermonkey,新增腳本,貼上 `observer.user.js` 全文。
-2. 把要觀察的網站加進腳本的 `@match`,**同時**把網域加進 `config.json` 的
-   `security.allowed_domains`(預設 deny,未授權網域腳本會自動停用)。
-3. 確認腳本內的 `TOKEN` 與 `config.json` 的 `bridge.token` 一致。
-4. AI 端的 MCP 設定指向 `http://127.0.0.1:8765/mcp`(Streamable HTTP)。
+   預設 `@match *://*/*` 觀察所有網站;想排除網銀等敏感站,在 Tampermonkey
+   的使用者排除規則加入即可。
+2. 確認腳本內的 `TOKEN` 與 `config.json` 的 `bridge.token` 一致
+   (白名單已停用:`allowed_domains: ["*"]`,由 `@match`/排除規則把關)。
+3. AI 端的 MCP 設定指向 `http://127.0.0.1:8765/mcp`(Streamable HTTP)。
 
 ## 安全設計(唯讀 ≠ 安全)
 
