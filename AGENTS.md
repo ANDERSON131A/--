@@ -17,10 +17,11 @@ Live DOM → 本機 Node.js 服務(HTTP Bridge + MCP Server)→ AI Agent 以 MCP
 ## 常用指令
 
 ```bash
-npm start   # 啟動 server(127.0.0.1:8765,Bridge + MCP 同一程序)
-npm test    # 煙霧測試 + jsdom 模擬器測試(38 項,用 18765/18771 埠)
+./start.sh  # 一鍵啟動:獨立 console 視窗跑 server(已偵測重複啟動;重啟後分頁會自動重連)
+npm start   # 前景啟動 server(127.0.0.1:8765,Bridge + MCP 同一程序)
+npm test    # 煙霧測試 + jsdom 模擬器測試(47 項,用 18765/18771 埠)
 npm run mock         # 模擬網站(18770,上機測試用)
-node test/e2e-check.mjs --contains "文字"   # 上機測試驗收(先 npm start + npm run mock)
+node test/e2e-check.mjs --contains "文字"   # 上機測試驗收(先啟動 server + npm run mock)
 ```
 
 目前沒有 lint/build;單檔語法檢查可用 `node --check <file>`。

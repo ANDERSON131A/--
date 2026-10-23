@@ -42,9 +42,16 @@ Edge + Tampermonkey:observer.user.js 讀取 Live DOM
 ## 啟動
 
 ```bash
+./start.sh    # 一鍵啟動(Windows/Git Bash):開獨立 console 視窗執行 server,
+              # 自動跳過重複啟動、首次自動 npm install 到 ./node_modules
+```
+
+手動方式(或非 Windows):
+
+```bash
 npm install   # 依賴只裝在 ./node_modules(環境規則:不在系統安裝任何軟體)
 npm start     # 啟動 127.0.0.1:8765,Bridge + MCP 同一程序
-npm test      # 端到端煙霧測試 + Userscript 模擬器測試(共 38 項,用 18765/18771 埠)
+npm test      # 端到端煙霧測試 + Userscript 模擬器測試(共 47 項,用 18765/18771 埠)
 ```
 
 ## 測試架構(三層)
