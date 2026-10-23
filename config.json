@@ -35,8 +35,8 @@
     "enable_json_response": true
   },
   "security": {
-    "default_policy": "deny",
-    "allowed_domains": ["example.com", "localhost", "127.0.0.1"],
+    "default_policy": "allow",
+    "allowed_domains": ["*"],
     "redact_sensitive_fields": true,
     "allow_browser_control": false
   }

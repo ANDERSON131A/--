@@ -308,9 +308,21 @@ function handleIngest(store, cfg, body) {
 }
 
 function handlePoll(store, cfg, query) {
-  const page = store.pages.get(query.get("tab_id"));
+  const tabId = query.get("tab_id");
+  let page = store.pages.get(tabId);
+  // 自我修復:server 重啟後 store 清空,已知分頁輪詢時帶 url 就地重新註冊,
+  // 不需要使用者重新載入頁面
+  if (!page && tabId && query.get("url")) {
+    if (store.domainAllowed(urlHostname(query.get("url")))) {
+      page = store.getOrCreate(tabId);
+      page.registered_at = Date.now();
+    }
+  }
   if (!page) return { status: 200, body: { ok: true, commands: [] } };
   page.last_seen = Date.now();
+  page.url = query.get("url") || page.url;
+  page.title = query.get("title") || page.title;
+  page.document_id = query.get("document_id") || page.document_id;
   const visibility = query.get("visibility");
   if (visibility) page.visibility = visibility;
   const rev = Number(query.get("dom_revision") || 0);

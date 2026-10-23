@@ -206,7 +206,9 @@
       tab_id: tabId,
       document_id: documentId,
       visibility: document.visibilityState,
-      dom_revision: String(domRevision)
+      dom_revision: String(domRevision),
+      url: location.href,
+      title: document.title
     });
     const r = await bridge("GET", "/poll?" + q.toString());
     if (r.status === 0) return; // 本機服務不在
