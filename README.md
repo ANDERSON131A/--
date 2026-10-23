@@ -44,7 +44,26 @@ Edge + Tampermonkey:observer.user.js 讀取 Live DOM
 ```bash
 npm install   # 依賴只裝在 ./node_modules(環境規則:不在系統安裝任何軟體)
 npm start     # 啟動 127.0.0.1:8765,Bridge + MCP 同一程序
-npm test      # 端到端煙霧測試(用 127.0.0.1:18765,不衝突)
+npm test      # 端到端煙霧測試 + Userscript 模擬器測試(共 38 項,用 18765/18771 埠)
+```
+
+## 測試架構(三層)
+
+| 層 | 檔案 | 驗什麼 |
+|---|---|---|
+| 1. 協定煙霧測試 | `test/smoke.mjs` | 模擬 Userscript 與 MCP Client 的 HTTP 行為:鑑權、白名單、MCP 握手、get_dom round-trip、多分頁、redact、截斷、離線 |
+| 2. Userscript 模擬器 | `test/simulator.mjs` | jsdom 跑「真的」`observer.user.js`(GM_* 以 shim 模擬):註冊、MutationObserver → revision、採集命令、手動選單、歷史、未授權網域停用 |
+| 3. 上機測試 | `test/mock-site.mjs` + `test/e2e-check.mjs` | 真實瀏覽器:模擬網站注入 GM shim + observer,點擊/導航後以 MCP 驗收快照 |
+
+上機測試流程:
+
+```bash
+npm start                    # 視窗 1:sidecar(8765)
+npm run mock                 # 視窗 2:模擬網站(18770)
+# 視窗 3:用瀏覽器開 http://127.0.0.1:18770/(observer 由頁面注入),等 6 秒
+node test/e2e-check.mjs --contains "MOCK_FLIGHT_E2E" --not-contains "TOP_SECRET_PW"
+# 點擊「更新價格」後:
+node test/e2e-check.mjs --contains "範例航空 C" --not-contains "範例航空 A" --min-revision 1
 ```
 
 接上瀏覽器:

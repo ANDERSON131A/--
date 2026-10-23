@@ -90,6 +90,10 @@ Edge + Tampermonkey Userscript(observer.user.js):讀取 Live DOM
 | 本機 API 被其他網頁/程序濫用 | 綁定 127.0.0.1、Token 驗證(X-Sidecar-Token)、Origin/Host 檢查(防 DNS rebinding) |
 | Prompt Injection | 網站內容視為不可信資料(OWASP 對 MCP tool 回傳內容的建議),限制 Agent 權限 |
 
+補充(上機測試發現):bridge 端點(/ingest、/poll)需開 CORS —— Tampermonkey 的
+GM_xmlhttpRequest 不受 CORS 限制,但頁內模擬(測試 shim)與未來 MV3 版本走一般
+fetch 時,瀏覽器會先送 preflight。/mcp 端點刻意不開 CORS,Host 檢查才有意義。
+
 原則:**原始 DOM 可存本機,但預設不允許任意 Agent 無限制取得**;預設 deny、per-site 授權;
 `allow_browser_control: false`。Chrome/Edge 的本機網路存取限制(LAN access permission)
 需在實際版本上驗證 Tampermonkey 連 127.0.0.1 的行為。

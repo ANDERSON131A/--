@@ -6,7 +6,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/smoke.mjs"
+    "mock": "node test/mock-site.mjs",
+    "test": "node test/smoke.mjs && node test/simulator.mjs",
+    "test:smoke": "node test/smoke.mjs",
+    "test:sim": "node test/simulator.mjs"
   },
   "engines": {
     "node": ">=18"
@@ -16,5 +19,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.20.0",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
   }
 }

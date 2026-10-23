@@ -233,11 +233,21 @@ function readBody(req, res) {
   });
 }
 
-function json(res, status, obj) {
+function json(res, status, obj, extraHeaders) {
   const body = JSON.stringify(obj);
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...extraHeaders });
   res.end(body);
 }
+
+// Bridge 端點的 CORS:正常 Tampermonkey 的 GM_xmlhttpRequest 不需要,
+// 但頁內模擬(測試 shim)與未來 MV3 版本走一般 fetch 時需要。
+// /mcp 端點刻意不加 CORS(維持 Host 檢查,DNS rebinding 防護才有意義)。
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, X-Sidecar-Token",
+  "Access-Control-Max-Age": "600"
+};
 
 function urlHostname(url) {
   try {
@@ -249,13 +259,14 @@ function urlHostname(url) {
 
 function handleIngest(store, cfg, body) {
   const type = body.type;
+  // 網域白名單先於任何狀態建立,拒絕的分頁不應出現在 store
+  const host = urlHostname(body.url);
+  if (!store.domainAllowed(host)) {
+    return { status: 403, body: { error: "domain_not_allowed", host } };
+  }
   const page = store.getOrCreate(body.tab_id || "tab-unknown");
 
   if (type === "register" || type === "status" || type === "heartbeat") {
-    const host = urlHostname(body.url);
-    if (!store.domainAllowed(host)) {
-      return { status: 403, body: { error: "domain_not_allowed", host } };
-    }
     if (type === "register" || page.document_id !== body.document_id) {
       if (type === "register") page.registered_at = Date.now();
       page.document_id = body.document_id || page.document_id;
@@ -273,10 +284,6 @@ function handleIngest(store, cfg, body) {
   }
 
   if (type === "snapshot") {
-    const host = urlHostname(body.url);
-    if (!store.domainAllowed(host)) {
-      return { status: 403, body: { error: "domain_not_allowed", host } };
-    }
     const snap = {
       request_id: body.request_id,
       revision: body.dom_revision || page.dom_revision,
@@ -530,26 +537,32 @@ function createApp(cfg, store) {
     const u = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
 
     try {
+      // CORS preflight(僅 bridge/healthz 端點)
+      if (req.method === "OPTIONS" && u.pathname !== cfg.mcp.endpoint) {
+        res.writeHead(204, CORS_HEADERS);
+        return res.end();
+      }
+
       if (u.pathname === "/healthz") {
-        return json(res, 200, { ok: true, name: SERVER_INFO.name, version: SERVER_INFO.version, pages: store.pages.size });
+        return json(res, 200, { ok: true, name: SERVER_INFO.name, version: SERVER_INFO.version, pages: store.pages.size }, CORS_HEADERS);
       }
 
       if (u.pathname === "/ingest" && req.method === "POST") {
         const token = req.headers["x-sidecar-token"];
         if (!cfg.bridge.token || token !== cfg.bridge.token) {
-          return json(res, 401, { error: "unauthorized", detail: "X-Sidecar-Token 不符或未設定" });
+          return json(res, 401, { error: "unauthorized", detail: "X-Sidecar-Token 不符或未設定" }, CORS_HEADERS);
         }
         const body = JSON.parse((await readBody(req, res)).toString("utf8") || "{}");
         const out = handleIngest(store, cfg, body);
-        return json(res, out.status, out.body);
+        return json(res, out.status, out.body, CORS_HEADERS);
       }
 
       if (u.pathname === "/poll" && req.method === "GET") {
         const token = req.headers["x-sidecar-token"];
         if (!cfg.bridge.token || token !== cfg.bridge.token) {
-          return json(res, 401, { error: "unauthorized", detail: "X-Sidecar-Token 不符或未設定" });
+          return json(res, 401, { error: "unauthorized", detail: "X-Sidecar-Token 不符或未設定" }, CORS_HEADERS);
         }
-        return json(res, 200, handlePoll(store, cfg, u.searchParams).body);
+        return json(res, 200, handlePoll(store, cfg, u.searchParams).body, CORS_HEADERS);
       }
 
       if (u.pathname === cfg.mcp.endpoint) {

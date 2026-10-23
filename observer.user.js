@@ -36,10 +36,13 @@
   "use strict";
 
   // ------------------------------------------------------------------ 設定
-  const BRIDGE = "http://127.0.0.1:8765";
-  const TOKEN = "dS-local-dev-7f31a8e2c4b9-CHANGE_ME"; // 與 config.json 的 bridge.token 相同
-  const HEARTBEAT_MS = 5000; // 與 config.json 的 bridge.heartbeat_seconds 相同
-  const DEBOUNCE_MS = 500; // 與 config.json 的 observer.debounce_ms 相同
+  // 測試環境(模擬器/注入頁面)可預先定義 window.__SIDECAR_CONFIG__ 覆寫;
+  // 正常 Tampermonkey 使用時不存在此變數,走預設值。
+  const PAGE_CFG = (typeof window !== "undefined" && window.__SIDECAR_CONFIG__) || {};
+  const BRIDGE = PAGE_CFG.BRIDGE || "http://127.0.0.1:8765";
+  const TOKEN = PAGE_CFG.TOKEN || "dS-local-dev-7f31a8e2c4b9-CHANGE_ME"; // 與 config.json 的 bridge.token 相同
+  const HEARTBEAT_MS = PAGE_CFG.HEARTBEAT_MS || 5000; // 與 config.json 的 bridge.heartbeat_seconds 相同
+  const DEBOUNCE_MS = PAGE_CFG.DEBOUNCE_MS || 500; // 與 config.json 的 observer.debounce_ms 相同
   const MAX_HTML_BYTES = 2 * 1024 * 1024; // 與 observer.max_snapshot_bytes 相同
   const MAX_TEXT_CHARS = 100000;
   const MAX_LINKS = 500;

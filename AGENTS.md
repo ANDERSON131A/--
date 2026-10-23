@@ -18,10 +18,13 @@ Live DOM → 本機 Node.js 服務(HTTP Bridge + MCP Server)→ AI Agent 以 MCP
 
 ```bash
 npm start   # 啟動 server(127.0.0.1:8765,Bridge + MCP 同一程序)
-npm test    # 端到端煙霧測試(22 項,用 18765 埠,不會撞到 server)
+npm test    # 煙霧測試 + jsdom 模擬器測試(38 項,用 18765/18771 埠)
+npm run mock         # 模擬網站(18770,上機測試用)
+node test/e2e-check.mjs --contains "文字"   # 上機測試驗收(先 npm start + npm run mock)
 ```
 
 目前沒有 lint/build;單檔語法檢查可用 `node --check <file>`。
+上機測試做法詳見 README「測試架構」一節;改動後三層測試都要過。
 
 ## 架構邊界(改動前必讀)
 
